@@ -1,1 +1,8 @@
 /target
+
+# Keep local bug notes out of Git.
+/BUGS.md
+
+# Keep transient agent coordination state out of Git.
+/AGENT_PROGRESS.md
+

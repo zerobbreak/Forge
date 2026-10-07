@@ -65,10 +65,12 @@ Rule: *if Forge needs it to function, it is Rust; if it is optional user extensi
 
 ## Working agreements for AI agents
 
+- **Check agent progress before changing code.** Read `AGENT_PROGRESS.md` if present and follow `.agents/skills/forge-progress/SKILL.md` to register work, detect overlapping files, and keep progress current.
 - **Work phase by phase** (`docs/10-roadmap-and-mvp.md`). Don't start a later phase's features early. Each phase has exit criteria; meet them before moving on.
 - **Stay inside the MVP list.** Out of MVP: interactive rebase, stash management UI, submodule management, issues & Actions logs, multi-host support, plugins, Forge World. If a request drifts there, write an ADR/note instead of code.
 - **Before adding a dependency**, check it isn't already in the stack and that it doesn't pull I/O into `forge-core`.
 - **Write the test with the feature.** Git behaviour is tested on real temp repos, not mocks (see `docs/09`). Destructive actions need a safety test.
+- **Document bugs locally** in the root `BUGS.md`; this file is ignored by Git and must not be committed.
 - **When a decision is Open** (`docs/11-decisions.md`), implement behind a trait/flag, record the choice you made as a Proposed ADR, and call it out in your summary. Do not silently pick.
 - **Never** log or store tokens/secrets; **never** build shell commands from strings (use arg arrays); treat repo paths and branch names as untrusted input.
 - **Never** let the TUI leave the terminal in a bad state: raw mode / alt screen must be restored on panic, error and signal.
