@@ -415,3 +415,10 @@ fn the_tab_strip_marks_commits_and_number_keys_switch_screens() {
     key(&mut view, KeyCode::Char('1'));
     assert!(view.closed, "1 goes back to Changes");
 }
+
+#[test]
+fn slash_asks_for_the_palette() {
+    let mut view = loaded_view();
+    key(&mut view, KeyCode::Char('/'));
+    assert!(view.open_palette);
+}

@@ -68,6 +68,7 @@ fn hints(view: &PullsView) -> Vec<Hint> {
         hint("f", view.filter.label()),
         hint("tab", "Details"),
         hint("esc", if view.detail_open { "List" } else { "Changes" }),
+        hint("/", "Commands"),
         hint("r", "Refresh"),
         hint("q", "Quit"),
     ]

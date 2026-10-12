@@ -67,6 +67,7 @@ fn hints(view: &CommitsView) -> Vec<Hint> {
             },
         ),
         hint("esc", if view.detail_open { "List" } else { "Changes" }),
+        hint("/", "Commands"),
         hint("r", "Refresh"),
         hint("q", "Quit"),
     ]

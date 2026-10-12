@@ -493,3 +493,16 @@ fn shrinking_the_window_hands_focus_back_from_a_hidden_sidebar() {
     key(&mut view, KeyCode::Char('j'));
     assert_eq!(view.focus, Pane::Files);
 }
+
+#[test]
+fn slash_asks_for_the_palette_even_with_the_sidebar_focused() {
+    let mut view = loaded_view();
+    key(&mut view, KeyCode::Char('/'));
+    assert!(view.open_palette);
+    view.open_palette = false;
+    render(140, 40, &view, false);
+    key(&mut view, KeyCode::Char('h'));
+    assert_eq!(view.focus, Pane::Nav);
+    key(&mut view, KeyCode::Char('/'));
+    assert!(view.open_palette);
+}

@@ -75,6 +75,8 @@ pub struct PullsView {
     pub closed: bool,
     /// A tab key asked for another screen.
     pub goto: Option<Screen>,
+    /// `/` was pressed: the app opens the command palette.
+    pub open_palette: bool,
     pub should_quit: bool,
 }
 
@@ -98,6 +100,7 @@ impl PullsView {
             request: Some(PullsRequest::List(PullFilter::Open)),
             closed: false,
             goto: None,
+            open_palette: false,
             should_quit: false,
         }
     }
@@ -204,6 +207,7 @@ impl PullsView {
         }
         match code {
             KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Char('/') => self.open_palette = true,
             KeyCode::Char(digit @ '1'..='9') => match Screen::from_digit(digit) {
                 Some(Screen::Changes) => self.closed = true,
                 Some(Screen::PullRequests) | None => {}

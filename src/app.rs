@@ -7,6 +7,7 @@ use crate::{
         changes::{self, ChangesView, draw_changes},
         commit::{self, CommitExit, CommitView, draw_commit},
         commits::{self, CommitsView, draw_commits},
+        palette::{Action, Outcome, PaletteView, draw_palette},
         projects::{self, ProjectBrowser, draw_browser, projects_root, spawn_loader},
         pulls::{self, PullsView, draw_pulls},
     },
@@ -14,12 +15,17 @@ use crate::{
 };
 use crossterm::{
     cursor::{Hide, Show},
-    event::{self, Event, KeyEventKind},
+    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Frame, Terminal, backend::CrosstermBackend};
 use std::{io, sync::mpsc, time::Duration};
+
+/// Reads and clears a request flag set by a screen's key handler.
+fn take(flag: &mut bool) -> bool {
+    std::mem::take(flag)
+}
 
 /// Restores the terminal when dropped, including while unwinding from a panic.
 struct TerminalGuard;
@@ -55,6 +61,10 @@ struct App {
     branches: Option<BranchesView>,
     /// The Pull requests screen, opened from Changes with `4`/`p`.
     pulls: Option<PullsView>,
+    /// The `/` command palette, drawn over whichever repository screen opened it.
+    palette: Option<PaletteView>,
+    /// Quit was chosen from the palette.
+    quit: bool,
     theme: Theme,
 }
 
@@ -83,6 +93,7 @@ impl App {
             self.commits = None;
             self.branches = None;
             self.pulls = None;
+            self.palette = None;
             return;
         };
         // Esc or a tab key on Commits, Branches or Pull requests ends that screen; a tab
@@ -135,10 +146,116 @@ impl App {
                 changes.draft.take(),
             ));
         }
+        self.open_palette_if_asked();
+    }
+
+    /// Opens the command palette when the screen on top asked for it with `/`.
+    fn open_palette_if_asked(&mut self) {
+        if self.palette.is_none()
+            && self.wants_palette()
+            && let Some(screen) = self.active_screen()
+        {
+            self.palette = Some(PaletteView::open(screen));
+        }
+    }
+
+    /// The repository screen on top, or `None` on the project list and the Commit screen.
+    fn active_screen(&self) -> Option<Screen> {
+        if self.commit.is_some() {
+            None
+        } else if self.commits.is_some() {
+            Some(Screen::Commits)
+        } else if self.branches.is_some() {
+            Some(Screen::Branches)
+        } else if self.pulls.is_some() {
+            Some(Screen::PullRequests)
+        } else if self.changes.is_some() {
+            Some(Screen::Changes)
+        } else {
+            None
+        }
+    }
+
+    /// Takes the `/` request from the screen on top, if it made one.
+    fn wants_palette(&mut self) -> bool {
+        match self.active_screen() {
+            Some(Screen::Commits) => self
+                .commits
+                .as_mut()
+                .is_some_and(|v| take(&mut v.open_palette)),
+            Some(Screen::Branches) => self
+                .branches
+                .as_mut()
+                .is_some_and(|v| take(&mut v.open_palette)),
+            Some(Screen::PullRequests) => self
+                .pulls
+                .as_mut()
+                .is_some_and(|v| take(&mut v.open_palette)),
+            Some(Screen::Changes) => self
+                .changes
+                .as_mut()
+                .is_some_and(|v| take(&mut v.open_palette)),
+            None => false,
+        }
+    }
+
+    /// Sends a key to the screen on top: the palette, the Commit screen, a repository
+    /// screen, or the project list.
+    fn handle_key(&mut self, code: KeyCode, modifiers: KeyModifiers) {
+        if let Some(palette) = &mut self.palette {
+            palette.handle_key(code, modifiers);
+            match palette.outcome.take() {
+                Some(Outcome::Close) => self.palette = None,
+                Some(Outcome::Run(action)) => {
+                    self.palette = None;
+                    self.run_action(action);
+                }
+                None => {}
+            }
+            return;
+        }
+        match (
+            &mut self.commit,
+            &mut self.commits,
+            &mut self.branches,
+            &mut self.pulls,
+            &mut self.changes,
+        ) {
+            (Some(view), ..) => view.handle_key(code, modifiers),
+            (None, Some(view), ..) => view.handle_key(code, modifiers),
+            (None, None, Some(view), ..) => view.handle_key(code, modifiers),
+            (None, None, None, Some(view), _) => view.handle_key(code, modifiers),
+            (None, None, None, None, Some(view)) => view.handle_key(code, modifiers),
+            (None, None, None, None, None) => self.browser.handle_key(code, modifiers),
+        }
+    }
+
+    /// Runs a palette command by pressing the key that does the same thing.
+    fn run_action(&mut self, action: Action) {
+        match action {
+            Action::Quit => self.quit = true,
+            Action::Projects => {
+                self.commits = None;
+                self.branches = None;
+                self.pulls = None;
+                if let Some(changes) = &mut self.changes {
+                    changes.closed = true;
+                }
+            }
+            Action::Screen(screen) => {
+                let index = Screen::TABS.iter().position(|(tab, _)| *tab == screen);
+                if let Some(digit) = index.and_then(|index| char::from_digit(index as u32 + 1, 10))
+                {
+                    self.handle_key(KeyCode::Char(digit), KeyModifiers::NONE);
+                }
+            }
+            Action::Key(code) => self.handle_key(code, KeyModifiers::NONE),
+        }
     }
 
     fn should_quit(&self) -> bool {
-        self.browser.should_quit
+        self.quit
+            || self.browser.should_quit
             || self.changes.as_ref().is_some_and(|view| view.should_quit)
             || self.commit.as_ref().is_some_and(|view| view.should_quit)
             || self.commits.as_ref().is_some_and(|view| view.should_quit)
@@ -162,6 +279,9 @@ impl App {
             (None, None, None, None, Some(view)) => draw_changes(frame, view, &self.theme, user),
             (None, None, None, None, None) => draw_browser(frame, &self.browser, &self.theme),
         }
+        if let Some(palette) = &self.palette {
+            draw_palette(frame, palette, &self.theme);
+        }
     }
 }
 
@@ -184,6 +304,8 @@ pub fn run_tui() -> io::Result<()> {
         commits: None,
         branches: None,
         pulls: None,
+        palette: None,
+        quit: false,
         theme: Theme::from_env(),
     };
     loop {
@@ -253,20 +375,7 @@ pub fn run_tui() -> io::Result<()> {
             && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
         {
-            match (
-                &mut app.commit,
-                &mut app.commits,
-                &mut app.branches,
-                &mut app.pulls,
-                &mut app.changes,
-            ) {
-                (Some(view), ..) => view.handle_key(key.code, key.modifiers),
-                (None, Some(view), ..) => view.handle_key(key.code, key.modifiers),
-                (None, None, Some(view), ..) => view.handle_key(key.code, key.modifiers),
-                (None, None, None, Some(view), _) => view.handle_key(key.code, key.modifiers),
-                (None, None, None, None, Some(view)) => view.handle_key(key.code, key.modifiers),
-                (None, None, None, None, None) => app.browser.handle_key(key.code, key.modifiers),
-            }
+            app.handle_key(key.code, key.modifiers);
         }
 
         if app.should_quit() {
@@ -317,6 +426,8 @@ mod tests {
             commits: None,
             branches: None,
             pulls: None,
+            palette: None,
+            quit: false,
             theme: Theme::new(false),
         };
         app.route();
@@ -332,27 +443,22 @@ mod tests {
         )
     }
 
+    /// A key press followed by the run loop's routing step.
+    fn press(app: &mut App, code: KeyCode) {
+        app.handle_key(code, KeyModifiers::NONE);
+        app.route();
+    }
+
+    fn type_text(app: &mut App, text: &str) {
+        for character in text.chars() {
+            press(app, KeyCode::Char(character));
+        }
+    }
+
     #[test]
     fn tab_keys_move_between_every_repository_screen() {
         let directory = TestDirectory::new("app-routing");
         let mut app = app_with_open_project(&directory);
-        let press = |app: &mut App, code: KeyCode| {
-            // Keys go to the topmost open screen, as in the run loop.
-            match (
-                &mut app.commits,
-                &mut app.branches,
-                &mut app.pulls,
-                &mut app.changes,
-            ) {
-                (Some(view), ..) => view.handle_key(code, KeyModifiers::NONE),
-                (None, Some(view), ..) => view.handle_key(code, KeyModifiers::NONE),
-                (None, None, Some(view), _) => view.handle_key(code, KeyModifiers::NONE),
-                (None, None, None, Some(view)) => view.handle_key(code, KeyModifiers::NONE),
-                _ => unreachable!("a project is open"),
-            }
-            app.route();
-        };
-
         // Changes -> Pull requests -> Commits -> Branches -> Pull requests -> Changes.
         press(&mut app, KeyCode::Char('4'));
         assert_eq!(open_screens(&app), (false, false, true));
@@ -402,5 +508,108 @@ mod tests {
         app.route();
         assert!(app.changes.is_none());
         assert_eq!(open_screens(&app), (false, false, false));
+    }
+
+    #[test]
+    fn the_palette_opens_with_slash_on_every_repository_screen_and_closes_with_escape() {
+        let directory = TestDirectory::new("app-palette-open");
+        let mut app = app_with_open_project(&directory);
+        for key in ['1', '2', '3', '4'] {
+            press(&mut app, KeyCode::Char(key));
+            press(&mut app, KeyCode::Char('/'));
+            assert!(app.palette.is_some(), "palette on screen {key}");
+            press(&mut app, KeyCode::Esc);
+            assert!(app.palette.is_none());
+            assert!(app.changes.is_some(), "esc closes only the palette");
+        }
+        // Keys typed into the palette do not reach the screen underneath.
+        press(&mut app, KeyCode::Char('/'));
+        type_text(&mut app, "q3");
+        assert!(!app.should_quit());
+        assert!(app.branches.is_none());
+        assert_eq!(app.palette.as_ref().unwrap().query(), "q3");
+    }
+
+    #[test]
+    fn palette_commands_jump_between_screens_by_name() {
+        let directory = TestDirectory::new("app-palette-go");
+        let mut app = app_with_open_project(&directory);
+        press(&mut app, KeyCode::Char('/'));
+        type_text(&mut app, "branches");
+        press(&mut app, KeyCode::Enter);
+        assert!(app.palette.is_none());
+        assert_eq!(open_screens(&app), (false, true, false));
+
+        press(&mut app, KeyCode::Char('/'));
+        assert_eq!(
+            app.palette.as_ref().unwrap().screen,
+            crate::screens::Screen::Branches
+        );
+        type_text(&mut app, "pull");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(open_screens(&app), (false, false, true));
+
+        press(&mut app, KeyCode::Char('/'));
+        type_text(&mut app, "history");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(open_screens(&app), (true, false, false));
+
+        press(&mut app, KeyCode::Char('/'));
+        type_text(&mut app, "changes");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(open_screens(&app), (false, false, false));
+    }
+
+    #[test]
+    fn palette_commands_press_the_screens_own_keys() {
+        let directory = TestDirectory::new("app-palette-keys");
+        let mut app = app_with_open_project(&directory);
+        app.changes.as_mut().unwrap().request = None;
+        press(&mut app, KeyCode::Char('/'));
+        type_text(&mut app, "refresh");
+        press(&mut app, KeyCode::Enter);
+        assert!(
+            app.changes.as_ref().unwrap().request.is_some(),
+            "Refresh pressed r on Changes"
+        );
+
+        press(&mut app, KeyCode::Char('2'));
+        app.commits.as_mut().unwrap().request = None;
+        press(&mut app, KeyCode::Char('/'));
+        type_text(&mut app, "all branches");
+        press(&mut app, KeyCode::Enter);
+        assert!(
+            app.commits.as_ref().unwrap().request.is_some(),
+            "the scope toggle reloads the log"
+        );
+    }
+
+    #[test]
+    fn palette_can_leave_the_project_and_quit() {
+        let directory = TestDirectory::new("app-palette-leave");
+        let mut app = app_with_open_project(&directory);
+        press(&mut app, KeyCode::Char('3'));
+        press(&mut app, KeyCode::Char('/'));
+        type_text(&mut app, "project list");
+        press(&mut app, KeyCode::Enter);
+        assert_eq!(open_screens(&app), (false, false, false));
+        assert!(app.changes.is_none());
+        assert_eq!(app.browser.opened_project, None);
+
+        let mut app = app_with_open_project(&TestDirectory::new("app-palette-quit"));
+        press(&mut app, KeyCode::Char('/'));
+        type_text(&mut app, "quit");
+        press(&mut app, KeyCode::Enter);
+        assert!(app.should_quit());
+    }
+
+    #[test]
+    fn slash_does_not_open_the_palette_on_the_project_list() {
+        let directory = TestDirectory::new("app-palette-list");
+        let mut app = app_with_open_project(&directory);
+        press(&mut app, KeyCode::Esc);
+        assert!(app.changes.is_none());
+        press(&mut app, KeyCode::Char('/'));
+        assert!(app.palette.is_none(), "the list uses / to filter");
     }
 }

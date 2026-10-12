@@ -710,3 +710,20 @@ fn digits_are_text_while_naming_a_branch() {
     };
     assert_eq!(name, "fix-123");
 }
+
+#[test]
+fn slash_asks_for_the_palette_but_is_plain_text_while_naming_a_branch() {
+    let mut view = loaded_view();
+    key(&mut view, KeyCode::Char('/'));
+    assert!(view.open_palette);
+    view.open_palette = false;
+
+    key(&mut view, KeyCode::Char('n'));
+    type_text(&mut view, "feat/palette");
+    assert!(!view.open_palette, "branch names contain slashes");
+    key(&mut view, KeyCode::Enter);
+    let Some(BranchesRequest::Run(Operation::Create { name, .. })) = &view.request else {
+        panic!("create requested");
+    };
+    assert_eq!(name, "feat/palette");
+}

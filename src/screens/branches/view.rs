@@ -82,6 +82,7 @@ fn hints(view: &BranchesView) -> Vec<Hint> {
     hints.extend([
         hint("tab", "Details"),
         hint("esc", if view.detail_open { "List" } else { "Changes" }),
+        hint("/", "Commands"),
         hint("r", "Refresh"),
         hint("q", "Quit"),
     ]);

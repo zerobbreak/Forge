@@ -29,5 +29,6 @@ pub mod branches;
 pub mod changes;
 pub mod commit;
 pub mod commits;
+pub mod palette;
 pub mod projects;
 pub mod pulls;

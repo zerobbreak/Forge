@@ -206,6 +206,8 @@ pub struct ChangesView {
     pub closed: bool,
     /// `c` was pressed: the app opens the Commit screen.
     pub open_commit: bool,
+    /// `/` was pressed: the app opens the command palette.
+    pub open_palette: bool,
     /// Another screen was asked for (`2`–`4`, `l`, `b`, `p`, or the sidebar); the app opens it.
     pub open_screen: Option<Screen>,
     /// Subject and body of a cancelled commit message, restored on the next `c`.
@@ -235,6 +237,7 @@ impl ChangesView {
             closed: false,
             open_commit: false,
             open_screen: None,
+            open_palette: false,
             draft: None,
             should_quit: false,
         }
@@ -555,6 +558,10 @@ impl ChangesView {
             return;
         }
 
+        if code == KeyCode::Char('/') && !control {
+            self.open_palette = true;
+            return;
+        }
         if self.focus == Pane::Nav && !self.nav_visible.get() {
             self.focus = Pane::Files;
         }

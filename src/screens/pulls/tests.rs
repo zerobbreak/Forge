@@ -464,3 +464,10 @@ fn quit_keys_and_works_without_color() {
     assert!(screen.contains("✕ 1/4"));
     assert!(screen.contains("○ WIP"));
 }
+
+#[test]
+fn slash_asks_for_the_palette() {
+    let mut view = loaded_view();
+    key(&mut view, KeyCode::Char('/'));
+    assert!(view.open_palette);
+}
