@@ -199,6 +199,8 @@ pub struct ChangesView {
     pub open_commit: bool,
     /// `l` was pressed: the app opens the Commits screen.
     pub open_commits: bool,
+    /// `b` was pressed: the app opens the Branches screen.
+    pub open_branches: bool,
     /// Subject and body of a cancelled commit message, restored on the next `c`.
     pub draft: Option<(String, String)>,
     pub should_quit: bool,
@@ -224,6 +226,7 @@ impl ChangesView {
             closed: false,
             open_commit: false,
             open_commits: false,
+            open_branches: false,
             draft: None,
             should_quit: false,
         }
@@ -234,6 +237,11 @@ impl ChangesView {
         self.tree.as_ref().map_or((Vec::new(), None), |tree| {
             (tree.staged.clone(), Some(tree.tracking.clone()))
         })
+    }
+
+    /// Reads the working tree again, e.g. after another screen changed the repository.
+    pub fn refresh(&mut self) {
+        self.reload();
     }
 
     /// Branch tracking for the title bar of screens opened from here.
@@ -530,6 +538,7 @@ impl ChangesView {
             KeyCode::Char('u') => self.unstage(),
             KeyCode::Char('x') => self.discard(),
             KeyCode::Char('l') => self.open_commits = true,
+            KeyCode::Char('b') => self.open_branches = true,
             KeyCode::Char('c') if self.tree.is_some() => {
                 self.notice = None;
                 self.open_commit = true;

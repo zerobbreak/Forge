@@ -2,6 +2,7 @@
 
 use crate::{
     screens::{
+        branches::{self, BranchesView, draw_branches},
         changes::{self, ChangesView, draw_changes},
         commit::{self, CommitExit, CommitView, draw_commit},
         commits::{self, CommitsView, draw_commits},
@@ -48,6 +49,8 @@ struct App {
     commit: Option<CommitView>,
     /// The Commits (history) screen, opened from Changes with `l`.
     commits: Option<CommitsView>,
+    /// The Branches screen, opened from Changes with `b`.
+    branches: Option<BranchesView>,
     theme: Theme,
 }
 
@@ -74,10 +77,20 @@ impl App {
         let Some(changes) = &mut self.changes else {
             self.commit = None;
             self.commits = None;
+            self.branches = None;
             return;
         };
         if self.commits.as_ref().is_some_and(|view| view.closed) {
             self.commits = None;
+        }
+        if self.branches.as_ref().is_some_and(|view| view.closed) {
+            self.branches = None;
+            // Branches may have switched or changed the checked-out branch.
+            changes.refresh();
+        }
+        if changes.open_branches {
+            changes.open_branches = false;
+            self.branches = Some(BranchesView::open(changes.path.clone(), changes.tracking()));
         }
         if changes.open_commits {
             changes.open_commits = false;
@@ -110,15 +123,17 @@ impl App {
             || self.changes.as_ref().is_some_and(|view| view.should_quit)
             || self.commit.as_ref().is_some_and(|view| view.should_quit)
             || self.commits.as_ref().is_some_and(|view| view.should_quit)
+            || self.branches.as_ref().is_some_and(|view| view.should_quit)
     }
 
     fn draw(&self, frame: &mut Frame<'_>) {
         let user = self.browser.user.as_deref();
-        match (&self.commit, &self.commits, &self.changes) {
-            (Some(view), _, _) => draw_commit(frame, view, &self.theme, user),
-            (None, Some(view), _) => draw_commits(frame, view, &self.theme, user),
-            (None, None, Some(view)) => draw_changes(frame, view, &self.theme, user),
-            (None, None, None) => draw_browser(frame, &self.browser, &self.theme),
+        match (&self.commit, &self.commits, &self.branches, &self.changes) {
+            (Some(view), ..) => draw_commit(frame, view, &self.theme, user),
+            (None, Some(view), ..) => draw_commits(frame, view, &self.theme, user),
+            (None, None, Some(view), _) => draw_branches(frame, view, &self.theme, user),
+            (None, None, None, Some(view)) => draw_changes(frame, view, &self.theme, user),
+            (None, None, None, None) => draw_browser(frame, &self.browser, &self.theme),
         }
     }
 }
@@ -131,6 +146,7 @@ pub fn run_tui() -> io::Result<()> {
     let (changes_sender, changes_events) = mpsc::channel();
     let (commit_sender, commit_events) = mpsc::channel();
     let (commits_sender, commits_events) = mpsc::channel();
+    let (branches_sender, branches_events) = mpsc::channel();
     spawn_loader(root.clone(), browser_sender.clone());
 
     let mut app = App {
@@ -138,6 +154,7 @@ pub fn run_tui() -> io::Result<()> {
         changes: None,
         commit: None,
         commits: None,
+        branches: None,
         theme: Theme::from_env(),
     };
     loop {
@@ -167,6 +184,16 @@ pub fn run_tui() -> io::Result<()> {
             }
         }
         app.route();
+        while let Ok((path, event)) = branches_events.try_recv() {
+            if let Some(view) = app.branches.as_mut().filter(|view| view.path == path) {
+                view.apply(event);
+            }
+        }
+        if let Some(view) = &mut app.branches
+            && let Some(request) = view.request.take()
+        {
+            branches::spawn_request(view.path.clone(), request, branches_sender.clone());
+        }
         if let Some(view) = &mut app.commits
             && let Some(request) = view.request.take()
         {
@@ -187,11 +214,17 @@ pub fn run_tui() -> io::Result<()> {
             && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
         {
-            match (&mut app.commit, &mut app.commits, &mut app.changes) {
-                (Some(view), _, _) => view.handle_key(key.code, key.modifiers),
-                (None, Some(view), _) => view.handle_key(key.code, key.modifiers),
-                (None, None, Some(view)) => view.handle_key(key.code, key.modifiers),
-                (None, None, None) => app.browser.handle_key(key.code, key.modifiers),
+            match (
+                &mut app.commit,
+                &mut app.commits,
+                &mut app.branches,
+                &mut app.changes,
+            ) {
+                (Some(view), ..) => view.handle_key(key.code, key.modifiers),
+                (None, Some(view), ..) => view.handle_key(key.code, key.modifiers),
+                (None, None, Some(view), _) => view.handle_key(key.code, key.modifiers),
+                (None, None, None, Some(view)) => view.handle_key(key.code, key.modifiers),
+                (None, None, None, None) => app.browser.handle_key(key.code, key.modifiers),
             }
         }
 

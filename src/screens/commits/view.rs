@@ -3,15 +3,15 @@ use crate::{
     git::log::{CommitDetail, CommitInfo, LogRow, LogScope, RefLabel},
     theme::{Role, Theme},
     ui::{
-        Hint, draw_bar, draw_title_bar, fit, hint, key_line, relative_age, repo_context,
-        ruled_heading, status_line, unix_now, window,
+        Hint, draw_bar, draw_title_bar, field, fit, format_utc, hint, key_line, pane_block,
+        relative_age, repo_context, ruled_heading, status_line, unix_now, window,
     },
 };
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Padding, Paragraph, Wrap},
+    widgets::{List, ListItem, ListState, Paragraph, Wrap},
 };
 
 /// At this width the list and the detail sit side by side; below it one replaces the other.
@@ -69,20 +69,9 @@ fn hints(view: &CommitsView) -> Vec<Hint> {
     ]
 }
 
-fn pane(theme: &Theme, divided: bool) -> Block<'static> {
-    Block::default()
-        .borders(if divided {
-            Borders::LEFT
-        } else {
-            Borders::NONE
-        })
-        .border_style(theme.fg(Role::Line))
-        .padding(Padding::new(1, 1, 1, 0))
-}
-
 fn draw_body(frame: &mut Frame<'_>, view: &CommitsView, theme: &Theme, area: Rect) {
     if area.width < SPLIT_MIN_WIDTH {
-        let block = pane(theme, false);
+        let block = pane_block(theme, false);
         let inner = block.inner(area);
         frame.render_widget(block, area);
         if view.detail_open {
@@ -97,7 +86,7 @@ fn draw_body(frame: &mut Frame<'_>, view: &CommitsView, theme: &Theme, area: Rec
         .constraints([Constraint::Fill(3), Constraint::Fill(2)])
         .split(area);
     for (index, draw) in [draw_list, draw_detail].into_iter().enumerate() {
-        let block = pane(theme, index == 1);
+        let block = pane_block(theme, index == 1);
         let inner = block.inner(columns[index]);
         frame.render_widget(block, columns[index]);
         draw(frame, view, theme, inner);
@@ -338,13 +327,6 @@ fn draw_detail(frame: &mut Frame<'_>, view: &CommitsView, theme: &Theme, area: R
     frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
 }
 
-fn field(theme: &Theme, name: &str, value: String) -> Line<'static> {
-    Line::from(vec![
-        Span::styled(format!("{name:<8}"), theme.fg(Role::Muted)),
-        Span::styled(value, theme.fg(Role::Ink)),
-    ])
-}
-
 fn detail_lines(
     theme: &Theme,
     commit: &CommitInfo,
@@ -388,7 +370,7 @@ fn detail_lines(
     }
     if !commit.refs.is_empty() {
         let mut spans = vec![Span::styled(
-            format!("{:<8}", "refs"),
+            format!("{:<10}", "refs"),
             theme.fg(Role::Muted),
         )];
         for label in &commit.refs {
@@ -435,30 +417,4 @@ fn detail_lines(
         lines.push(Line::from(spans));
     }
     lines
-}
-
-/// `2026-10-10 14:03 UTC` for a Unix timestamp.
-pub fn format_utc(timestamp: u64) -> String {
-    let days = (timestamp / 86_400) as i64;
-    let seconds = timestamp % 86_400;
-    // Days since 1970-01-01 to a civil date (Howard Hinnant's algorithm).
-    let shifted = days + 719_468;
-    let era = shifted.div_euclid(146_097);
-    let day_of_era = shifted.rem_euclid(146_097);
-    let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_index = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
-    let month = if month_index < 10 {
-        month_index + 3
-    } else {
-        month_index - 9
-    };
-    let year = year_of_era + era * 400 + i64::from(month <= 2);
-    format!(
-        "{year:04}-{month:02}-{day:02} {:02}:{:02} UTC",
-        seconds / 3_600,
-        seconds % 3_600 / 60
-    )
 }

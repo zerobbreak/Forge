@@ -70,6 +70,7 @@ fn hints(view: &ChangesView) -> Vec<crate::ui::Hint> {
     hints.extend([
         hint("c", "Commit"),
         hint("l", "Log"),
+        hint("b", "Branches"),
         hint("tab", "Next pane"),
         hint("r", "Refresh"),
         hint("esc", "Projects"),

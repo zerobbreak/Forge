@@ -8,7 +8,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Padding, Paragraph},
 };
 use std::{
     env,
@@ -166,6 +166,18 @@ pub fn window(theme: &Theme) -> Block<'static> {
         .style(theme.bg(Role::Panel).patch(theme.fg(Role::Ink)))
 }
 
+/// A pane with a rule on its left edge when it follows another pane.
+pub fn pane_block(theme: &Theme, divided: bool) -> Block<'static> {
+    Block::default()
+        .borders(if divided {
+            Borders::LEFT
+        } else {
+            Borders::NONE
+        })
+        .border_style(theme.fg(Role::Line))
+        .padding(Padding::new(1, 1, 1, 0))
+}
+
 /// Title bar: `FORGE` plus `context` on the left, the GitHub login on the right.
 pub fn draw_title_bar(
     frame: &mut Frame<'_>,
@@ -211,6 +223,14 @@ pub fn ruled_heading(theme: &Theme, text: &str, width: usize, role: Role) -> Lin
         Span::styled(label, theme.bold(role)),
         Span::raw(" "),
         Span::styled("─".repeat(rule), theme.fg(Role::Line)),
+    ])
+}
+
+/// A `name   value` row of a detail pane.
+pub fn field(theme: &Theme, name: &str, value: String) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(format!("{name:<10}"), theme.fg(Role::Muted)),
+        Span::styled(value, theme.fg(Role::Ink)),
     ])
 }
 
@@ -263,6 +283,32 @@ pub fn unix_now() -> u64 {
         .map_or(0, |elapsed| elapsed.as_secs())
 }
 
+/// `2026-10-10 14:03 UTC` for a Unix timestamp.
+pub fn format_utc(timestamp: u64) -> String {
+    let days = (timestamp / 86_400) as i64;
+    let seconds = timestamp % 86_400;
+    // Days since 1970-01-01 to a civil date (Howard Hinnant's algorithm).
+    let shifted = days + 719_468;
+    let era = shifted.div_euclid(146_097);
+    let day_of_era = shifted.rem_euclid(146_097);
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_index = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
+    let month = if month_index < 10 {
+        month_index + 3
+    } else {
+        month_index - 9
+    };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02} UTC",
+        seconds / 3_600,
+        seconds % 3_600 / 60
+    )
+}
+
 /// `path` with the home folder shown as `~`.
 pub fn display_root(root: &Path) -> String {
     if let Some(home) = env::var_os("USERPROFILE").or_else(|| env::var_os("HOME")) {
@@ -276,7 +322,7 @@ pub fn display_root(root: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{fit, hint, key_line, primary, relative_age};
+    use super::{fit, format_utc, hint, key_line, primary, relative_age};
     use crate::theme::Theme;
 
     #[test]
@@ -304,5 +350,12 @@ mod tests {
         assert_eq!(full, "  s  Stage   a All   q Quit");
         let narrow = key_line(&theme, &hints, 20).to_string();
         assert_eq!(narrow, "  s  Stage   a All");
+    }
+
+    #[test]
+    fn formats_timestamps_as_utc_dates() {
+        assert_eq!(format_utc(0), "1970-01-01 00:00 UTC");
+        assert_eq!(format_utc(1_760_105_000), "2025-10-10 14:03 UTC");
+        assert_eq!(format_utc(951_782_400), "2000-02-29 00:00 UTC");
     }
 }

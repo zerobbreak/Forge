@@ -1,4 +1,4 @@
-use super::{CommitsEvent, CommitsRequest, CommitsView, draw_commits, view::format_utc};
+use super::{CommitsEvent, CommitsRequest, CommitsView, draw_commits};
 use crate::{
     git::{
         log::{
@@ -349,13 +349,6 @@ fn works_without_color() {
         "refs are readable without colour"
     );
     assert!(screen.contains("> ●"));
-}
-
-#[test]
-fn formats_timestamps_as_utc_dates() {
-    assert_eq!(format_utc(0), "1970-01-01 00:00 UTC");
-    assert_eq!(format_utc(1_760_105_000), "2025-10-10 14:03 UTC");
-    assert_eq!(format_utc(951_782_400), "2000-02-29 00:00 UTC");
 }
 
 #[test]
