@@ -5,7 +5,9 @@ mod view;
 pub use view::draw_commits;
 
 use crate::git::{
-    log::{CommitDetail, CommitInfo, LogPage, LogRow, LogScope, PAGE, read_commit_detail, read_log},
+    log::{
+        CommitDetail, CommitInfo, LogPage, LogRow, LogScope, PAGE, read_commit_detail, read_log,
+    },
     repository::BranchTracking,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
@@ -158,7 +160,10 @@ impl CommitsView {
                 }
             }
             CommitsEvent::Detail(hash, result) => {
-                if self.selected_commit().is_some_and(|commit| commit.hash == hash) {
+                if self
+                    .selected_commit()
+                    .is_some_and(|commit| commit.hash == hash)
+                {
                     self.detail = Some((hash, result));
                 }
             }
@@ -170,7 +175,11 @@ impl CommitsView {
             self.detail = None;
             return;
         };
-        if self.detail.as_ref().is_some_and(|(loaded, _)| *loaded == hash) {
+        if self
+            .detail
+            .as_ref()
+            .is_some_and(|(loaded, _)| *loaded == hash)
+        {
             return;
         }
         // A pending reload must not be replaced; it asks for the detail itself when it lands.

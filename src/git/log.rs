@@ -25,14 +25,6 @@ pub enum RefLabel {
     Tag(String),
 }
 
-impl RefLabel {
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Head(name) | Self::Branch(name) | Self::Remote(name) | Self::Tag(name) => name,
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommitInfo {
     pub hash: String,
@@ -262,7 +254,10 @@ fn parse_numstat(output: &str) -> Vec<FileStat> {
 mod tests {
     use super::{LogScope, RefLabel, parse_log, parse_refs, read_commit_detail, read_log};
     use crate::test_support::{TestDirectory, git_text, run_git};
-    use std::{fs, path::PathBuf};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+    };
 
     fn repository(directory: &TestDirectory) -> PathBuf {
         let repo = directory.path().join("repo");
@@ -274,7 +269,7 @@ mod tests {
         repo
     }
 
-    fn commit(repo: &PathBuf, file: &str, text: &str, message: &str) {
+    fn commit(repo: &Path, file: &str, text: &str, message: &str) {
         fs::write(repo.join(file), text).unwrap();
         run_git(repo, &["add", file]);
         run_git(repo, &["commit", "-m", message]);
@@ -293,10 +288,7 @@ mod tests {
                 RefLabel::Branch("feat/x".to_owned()),
             ]
         );
-        assert_eq!(
-            parse_refs("HEAD"),
-            vec![RefLabel::Head("HEAD".to_owned())]
-        );
+        assert_eq!(parse_refs("HEAD"), vec![RefLabel::Head("HEAD".to_owned())]);
         assert!(parse_refs("").is_empty());
     }
 
@@ -325,10 +317,17 @@ mod tests {
         commit(&repo, "b.txt", "2\n", "feat: side work");
         run_git(&repo, &["switch", "main"]);
         commit(&repo, "c.txt", "3\n", "fix: main work");
-        run_git(&repo, &["merge", "--no-ff", "feat/side", "-m", "Merge feat/side"]);
+        run_git(
+            &repo,
+            &["merge", "--no-ff", "feat/side", "-m", "Merge feat/side"],
+        );
 
         let page = read_log(&repo, LogScope::All, 50).expect("log reads");
-        let commits: Vec<_> = page.rows.iter().filter_map(|row| row.commit.as_ref()).collect();
+        let commits: Vec<_> = page
+            .rows
+            .iter()
+            .filter_map(|row| row.commit.as_ref())
+            .collect();
         let subjects: Vec<_> = commits.iter().map(|c| c.subject.as_str()).collect();
         assert_eq!(subjects[0], "Merge feat/side");
         assert!(subjects.contains(&"feat: side work"));
@@ -340,8 +339,14 @@ mod tests {
         assert!(commits[0].refs.contains(&RefLabel::Head("main".to_owned())));
         let first = commits.iter().find(|c| c.subject == "feat: first").unwrap();
         assert!(first.refs.contains(&RefLabel::Tag("v0.1".to_owned())));
-        let side = commits.iter().find(|c| c.subject == "feat: side work").unwrap();
-        assert!(side.refs.contains(&RefLabel::Branch("feat/side".to_owned())));
+        let side = commits
+            .iter()
+            .find(|c| c.subject == "feat: side work")
+            .unwrap();
+        assert!(
+            side.refs
+                .contains(&RefLabel::Branch("feat/side".to_owned()))
+        );
 
         let head_only = read_log(&repo, LogScope::Head, 50).expect("log reads");
         assert!(head_only.rows.iter().filter(|r| r.commit.is_some()).count() >= 4);
@@ -376,7 +381,10 @@ mod tests {
         fs::write(repo.join("a.txt"), "1\n2\n3\n").unwrap();
         fs::write(repo.join("img.bin"), [0u8, 159, 146, 150]).unwrap();
         run_git(&repo, &["add", "."]);
-        run_git(&repo, &["commit", "-m", "feat: second\n\nBody line.\n\nRefs: #4"]);
+        run_git(
+            &repo,
+            &["commit", "-m", "feat: second\n\nBody line.\n\nRefs: #4"],
+        );
         let hash = git_text(&repo, &["rev-parse", "HEAD"]).trim().to_owned();
 
         let detail = read_commit_detail(&repo, &hash).expect("detail reads");

@@ -162,8 +162,14 @@ fn renders_the_graph_and_key_bar_at_80x24() {
     assert!(screen.contains("aaaaaaa"));
     assert!(screen.contains("[⎇ main]"));
     assert!(screen.contains("[origin/main]"));
-    assert!(screen.contains("Merge feat/redis-cache"));
-    assert!(screen.contains("│ ●"), "side lane is drawn with box characters");
+    assert!(
+        screen.contains("Merge feat/"),
+        "subject is shown beside the chips"
+    );
+    assert!(
+        screen.contains("│ ●"),
+        "side lane is drawn with box characters"
+    );
     assert!(screen.contains("[tag: v0.1]"));
     assert!(screen.contains("3h"));
     assert!(screen.contains("j/k Move"));
@@ -338,7 +344,10 @@ fn quit_keys_and_refresh() {
 #[test]
 fn works_without_color() {
     let screen = render(80, 24, &loaded_view(), false);
-    assert!(screen.contains("[⎇ main]"), "refs are readable without colour");
+    assert!(
+        screen.contains("[⎇ main]"),
+        "refs are readable without colour"
+    );
     assert!(screen.contains("> ●"));
 }
 

@@ -307,10 +307,19 @@ fn draw_detail(frame: &mut Frame<'_>, view: &CommitsView, theme: &Theme, area: R
         return;
     };
     let mut lines = vec![
-        ruled_heading(theme, &format!("Commit {}", commit.short), width, Role::Muted),
+        ruled_heading(
+            theme,
+            &format!("Commit {}", commit.short),
+            width,
+            Role::Muted,
+        ),
         Line::raw(""),
     ];
-    match view.detail.as_ref().filter(|(hash, _)| *hash == commit.hash) {
+    match view
+        .detail
+        .as_ref()
+        .filter(|(hash, _)| *hash == commit.hash)
+    {
         Some((_, Ok(detail))) => lines.extend(detail_lines(theme, commit, detail, width)),
         Some((_, Err(error))) => {
             lines.push(Line::styled(commit.subject.clone(), theme.bold(Role::Ink)));
@@ -355,19 +364,15 @@ fn detail_lines(
         "author",
         format!("{} <{}>", detail.author, detail.email),
     ));
-    lines.push(field(
-        theme,
-        "date",
-        {
-            let age = relative_age(unix_now(), detail.time);
-            let age = if age == "now" {
-                "just now".to_owned()
-            } else {
-                format!("{age} ago")
-            };
-            format!("{} · {age}", format_utc(detail.time))
-        },
-    ));
+    lines.push(field(theme, "date", {
+        let age = relative_age(unix_now(), detail.time);
+        let age = if age == "now" {
+            "just now".to_owned()
+        } else {
+            format!("{age} ago")
+        };
+        format!("{} · {age}", format_utc(detail.time))
+    }));
     if !detail.parents.is_empty() {
         let parents: Vec<_> = detail
             .parents
@@ -382,7 +387,10 @@ fn detail_lines(
         ));
     }
     if !commit.refs.is_empty() {
-        let mut spans = vec![Span::styled(format!("{:<8}", "refs"), theme.fg(Role::Muted))];
+        let mut spans = vec![Span::styled(
+            format!("{:<8}", "refs"),
+            theme.fg(Role::Muted),
+        )];
         for label in &commit.refs {
             spans.push(Span::styled(chip_text(label), chip_style(theme, label)));
             spans.push(Span::raw(" "));
