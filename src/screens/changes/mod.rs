@@ -8,7 +8,7 @@ use crate::git::changes::{
     DiffLine, FileChange, FileDiff, FileState, WorkingTree, apply_to_index, diff_for, discard_file,
     discard_hunk, read_working_tree, stage_file, unstage_file,
 };
-use crate::{git::repository::BranchTracking, ui::Notice};
+use crate::{git::repository::BranchTracking, screens::Screen, ui::Notice};
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::{path::PathBuf, sync::mpsc, thread};
 
@@ -17,9 +17,14 @@ const DIFF_PAGE: u16 = 10;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pane {
+    /// The repository sidebar (Changes, Commits, Branches, …); only on wide terminals.
+    Nav,
     Files,
     Diff,
 }
+
+/// Sidebar entries in order; the first three are screens, the rest are planned.
+const NAV_ITEMS: usize = 5;
 
 /// Identifies a row: the same path can be listed once staged and once unstaged.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -185,6 +190,10 @@ pub struct ChangesView {
     loading: bool,
     selected: usize,
     focus: Pane,
+    /// The sidebar entry under the cursor while the sidebar has focus.
+    nav_cursor: usize,
+    /// Set while drawing: whether the window is wide enough to show the sidebar.
+    nav_visible: std::cell::Cell<bool>,
     diff: Option<LoadedDiff>,
     hunk: usize,
     diff_scroll: u16,
@@ -197,10 +206,8 @@ pub struct ChangesView {
     pub closed: bool,
     /// `c` was pressed: the app opens the Commit screen.
     pub open_commit: bool,
-    /// `l` was pressed: the app opens the Commits screen.
-    pub open_commits: bool,
-    /// `b` was pressed: the app opens the Branches screen.
-    pub open_branches: bool,
+    /// Another screen was asked for (`2`–`4`, `l`, `b`, `p`, or the sidebar); the app opens it.
+    pub open_screen: Option<Screen>,
     /// Subject and body of a cancelled commit message, restored on the next `c`.
     pub draft: Option<(String, String)>,
     pub should_quit: bool,
@@ -216,6 +223,8 @@ impl ChangesView {
             loading: true,
             selected: 0,
             focus: Pane::Files,
+            nav_cursor: 0,
+            nav_visible: std::cell::Cell::new(false),
             diff: None,
             hunk: 0,
             diff_scroll: 0,
@@ -225,8 +234,7 @@ impl ChangesView {
             request: Some(ChangesRequest::Load),
             closed: false,
             open_commit: false,
-            open_commits: false,
-            open_branches: false,
+            open_screen: None,
             draft: None,
             should_quit: false,
         }
@@ -378,6 +386,10 @@ impl ChangesView {
 
     fn move_cursor(&mut self, delta: isize) {
         match self.focus {
+            Pane::Nav => {
+                let next = (self.nav_cursor as isize + delta).clamp(0, NAV_ITEMS as isize - 1);
+                self.nav_cursor = next as usize;
+            }
             Pane::Files => {
                 let count = self.entries().len();
                 if count > 0 {
@@ -484,6 +496,45 @@ impl ChangesView {
         self.confirm = Some(Discard { change, hunk });
     }
 
+    fn focus_nav(&mut self) {
+        if self.nav_visible.get() {
+            self.focus = Pane::Nav;
+            self.nav_cursor = 0;
+        } else {
+            self.say(
+                "The sidebar needs a wider window. Use the tabs on top: 2 Commits, 3 Branches, 4 Pull Requests.",
+            );
+        }
+    }
+
+    /// Opens sidebar entry `index`: 0 Changes, 1 Commits, 2 Branches, 3 Pull Requests, 4 Remote.
+    fn open_entry(&mut self, index: usize) {
+        match index {
+            0 => self.focus = Pane::Files,
+            1 => self.open_screen = Some(Screen::Commits),
+            2 => self.open_screen = Some(Screen::Branches),
+            3 => self.open_screen = Some(Screen::PullRequests),
+            _ => self.say("Remote is not built yet."),
+        }
+    }
+
+    /// Keys while the sidebar has focus.
+    fn nav_key(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Esc | KeyCode::Tab | KeyCode::BackTab | KeyCode::Right => {
+                self.focus = Pane::Files;
+            }
+            KeyCode::Up | KeyCode::Char('k') => self.move_cursor(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.move_cursor(1),
+            KeyCode::Enter => self.open_entry(self.nav_cursor),
+            KeyCode::Char('l') => self.open_screen = Some(Screen::Commits),
+            KeyCode::Char('b') => self.open_screen = Some(Screen::Branches),
+            KeyCode::Char('p') => self.open_screen = Some(Screen::PullRequests),
+            _ => {}
+        }
+    }
+
     pub fn handle_key(&mut self, code: KeyCode, modifiers: KeyModifiers) {
         let control = modifiers.contains(KeyModifiers::CONTROL);
         if control && code == KeyCode::Char('c') {
@@ -504,6 +555,18 @@ impl ChangesView {
             return;
         }
 
+        if self.focus == Pane::Nav && !self.nav_visible.get() {
+            self.focus = Pane::Files;
+        }
+        if let KeyCode::Char(digit @ '1'..='5') = code
+            && !control
+        {
+            return self.open_entry(digit as usize - '1' as usize);
+        }
+        if self.focus == Pane::Nav {
+            return self.nav_key(code);
+        }
+
         let mutates = !control && matches!(code, KeyCode::Char('s' | 'a' | 'u' | 'x' | 'r' | 'c'));
         if mutates && self.busy.is_some() {
             return self.say("Still working on the last change…");
@@ -514,8 +577,8 @@ impl ChangesView {
             KeyCode::Esc => self.closed = true,
             KeyCode::Tab | KeyCode::BackTab => {
                 self.focus = match self.focus {
+                    Pane::Nav | Pane::Diff => Pane::Files,
                     Pane::Files => Pane::Diff,
-                    Pane::Diff => Pane::Files,
                 }
             }
             KeyCode::Enter if self.focus == Pane::Files => self.focus = Pane::Diff,
@@ -537,8 +600,10 @@ impl ChangesView {
             KeyCode::Char('a') => self.stage_file(),
             KeyCode::Char('u') => self.unstage(),
             KeyCode::Char('x') => self.discard(),
-            KeyCode::Char('l') => self.open_commits = true,
-            KeyCode::Char('b') => self.open_branches = true,
+            KeyCode::Char('l') => self.open_screen = Some(Screen::Commits),
+            KeyCode::Char('b') => self.open_screen = Some(Screen::Branches),
+            KeyCode::Char('p') => self.open_screen = Some(Screen::PullRequests),
+            KeyCode::Left | KeyCode::Char('h') if self.focus == Pane::Files => self.focus_nav(),
             KeyCode::Char('c') if self.tree.is_some() => {
                 self.notice = None;
                 self.open_commit = true;

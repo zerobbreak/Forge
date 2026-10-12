@@ -1,5 +1,7 @@
 //! GitHub access through the GitHub CLI (`gh`).
 
+pub mod pulls;
+
 use std::{io, process::Command};
 
 #[derive(Debug, PartialEq, Eq)]

@@ -399,3 +399,19 @@ fn reads_a_real_repository_end_to_end() {
     assert!(screen.contains("BROUGHT IN · 1 FILE"));
     assert!(screen.contains("b.txt"));
 }
+
+#[test]
+fn the_tab_strip_marks_commits_and_number_keys_switch_screens() {
+    use crate::screens::Screen;
+    let mut view = loaded_view();
+    let screen = render(80, 24, &view, false);
+    assert!(screen.contains("[2 Commits]"));
+    assert!(screen.contains("1 Changes"));
+    assert!(screen.contains("3 Branches"));
+    key(&mut view, KeyCode::Char('2'));
+    assert!(!view.closed && view.goto.is_none(), "already here");
+    key(&mut view, KeyCode::Char('3'));
+    assert_eq!(view.goto, Some(Screen::Branches));
+    key(&mut view, KeyCode::Char('1'));
+    assert!(view.closed, "1 goes back to Changes");
+}

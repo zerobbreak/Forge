@@ -533,7 +533,7 @@ fn project_order(left: &Project, right: &Project) -> std::cmp::Ordering {
     key(left).cmp(&key(right))
 }
 
-fn load_project(root: &Path, path: PathBuf) -> Result<Project, String> {
+pub(crate) fn load_project(root: &Path, path: PathBuf) -> Result<Project, String> {
     let status = git_output(&path, &["status", "--porcelain=1", "--branch"])?;
     let status_text = String::from_utf8_lossy(&status);
     let mut status_lines = status_text.lines();

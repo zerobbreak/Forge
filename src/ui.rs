@@ -2,6 +2,7 @@
 
 use crate::{
     git::repository::BranchTracking,
+    screens::Screen,
     theme::{Role, Theme},
 };
 use ratatui::{
@@ -208,6 +209,22 @@ pub fn draw_title_bar(
     if let Some(right) = right {
         frame.render_widget(Paragraph::new(right), columns[1]);
     }
+}
+
+/// The one-row tab strip shared by Changes, Commits and Branches: `[1 Changes]  2 Commits …`.
+pub fn draw_tabs(frame: &mut Frame<'_>, theme: &Theme, area: Rect, active: Screen) {
+    let mut spans = vec![Span::raw(" ")];
+    for (index, (screen, label)) in Screen::TABS.iter().enumerate() {
+        let text = format!("{} {label}", index + 1);
+        if *screen == active {
+            // Brackets keep the active tab visible when colour is off.
+            spans.push(Span::styled(format!("[{text}]"), theme.bold(Role::Cursor)));
+        } else {
+            spans.push(Span::styled(format!(" {text} "), theme.fg(Role::Muted)));
+        }
+        spans.push(Span::raw(" "));
+    }
+    frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
 /// An uppercase section label, e.g. `RECENT COMMITS`.

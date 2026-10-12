@@ -682,3 +682,31 @@ fn creates_switches_renames_and_deletes_in_a_real_repository() {
     assert!(notice(&view).contains("Undo with: git branch feat/renamed "));
     assert!(view.branches().iter().all(|b| b.name != "feat/renamed"));
 }
+
+#[test]
+fn the_tab_strip_marks_branches_and_number_keys_switch_screens() {
+    use crate::screens::Screen;
+    let mut view = loaded_view();
+    let screen = render(80, 24, &view, false);
+    assert!(screen.contains("[3 Branches]"));
+    assert!(screen.contains("2 Commits"));
+    key(&mut view, KeyCode::Char('3'));
+    assert!(!view.closed && view.goto.is_none(), "already here");
+    key(&mut view, KeyCode::Char('2'));
+    assert_eq!(view.goto, Some(Screen::Commits));
+    key(&mut view, KeyCode::Char('1'));
+    assert!(view.closed, "1 goes back to Changes");
+}
+
+#[test]
+fn digits_are_text_while_naming_a_branch() {
+    let mut view = loaded_view();
+    key(&mut view, KeyCode::Char('n'));
+    type_text(&mut view, "fix-123");
+    assert!(!view.closed && view.goto.is_none());
+    key(&mut view, KeyCode::Enter);
+    let Some(BranchesRequest::Run(Operation::Create { name, .. })) = &view.request else {
+        panic!("create requested");
+    };
+    assert_eq!(name, "fix-123");
+}

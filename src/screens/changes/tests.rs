@@ -1,4 +1,5 @@
 use super::{ChangesEvent, ChangesRequest, ChangesView, EntryKey, Operation, Pane, draw_changes};
+use crate::screens::Screen;
 use crate::{
     git::{
         changes::{FileChange, FileState, WorkingTree, parse_diff, read_working_tree},
@@ -111,7 +112,9 @@ fn renders_navigation_and_summary_on_wide_terminals_without_color() {
     let view = loaded_view();
     let screen = render(140, 40, &view, false);
     assert!(screen.contains("REPOSITORY"));
-    assert!(screen.contains("> Changes"));
+    assert!(screen.contains("> 1 Changes"));
+    assert!(screen.contains("2 Commits"));
+    assert!(screen.contains("3 Branches"));
     assert!(screen.contains("Branches"));
     assert!(screen.contains("SUMMARY"));
     assert!(screen.contains("4 files · +17 −49"));
@@ -364,4 +367,129 @@ fn c_opens_the_commit_screen_with_staged_files() {
     view.commit_finished(crate::ui::Notice::info("Committed abc1234 x."));
     assert_eq!(view.request, Some(ChangesRequest::Load));
     assert!(render(80, 24, &view, true).contains("✓ Committed abc1234 x."));
+}
+
+#[test]
+fn the_tab_strip_is_visible_at_every_width() {
+    let view = loaded_view();
+    for (width, height) in [(80, 24), (50, 20), (140, 40)] {
+        let screen = render(width, height, &view, false);
+        assert!(screen.contains("[1 Changes]"), "{width}x{height}");
+        assert!(screen.contains("2 Commits"), "{width}x{height}");
+        assert!(screen.contains("3 Branches"), "{width}x{height}");
+    }
+}
+
+#[test]
+fn number_keys_open_the_other_screens_from_any_pane() {
+    let mut view = loaded_view();
+    key(&mut view, KeyCode::Char('2'));
+    assert_eq!(view.open_screen.take(), Some(Screen::Commits));
+    key(&mut view, KeyCode::Tab);
+    key(&mut view, KeyCode::Char('3'));
+    assert_eq!(view.open_screen.take(), Some(Screen::Branches));
+    key(&mut view, KeyCode::Char('4'));
+    assert_eq!(view.open_screen.take(), Some(Screen::PullRequests));
+    key(&mut view, KeyCode::Char('p'));
+    assert_eq!(view.open_screen.take(), Some(Screen::PullRequests));
+    key(&mut view, KeyCode::Char('5'));
+    assert!(
+        view.notice
+            .as_ref()
+            .unwrap()
+            .text
+            .contains("Remote is not built yet")
+    );
+    assert_eq!(view.open_screen, None);
+    key(&mut view, KeyCode::Char('1'));
+    assert_eq!(view.focus, Pane::Files, "1 returns to the file list");
+}
+
+#[test]
+fn the_sidebar_can_be_focused_and_its_labels_open_screens() {
+    let mut view = loaded_view();
+    // Before a wide render the sidebar is not on screen, so it cannot take focus.
+    render(80, 24, &view, false);
+    key(&mut view, KeyCode::Char('h'));
+    assert_eq!(view.focus, Pane::Files);
+    assert!(
+        view.notice
+            .as_ref()
+            .unwrap()
+            .text
+            .contains("needs a wider window")
+    );
+
+    render(140, 40, &view, false);
+    key(&mut view, KeyCode::Left);
+    assert_eq!(view.focus, Pane::Nav);
+    let screen = render(140, 40, &view, false);
+    assert!(
+        screen.contains("▸ REPOSITORY"),
+        "focus is visible without colour"
+    );
+    assert!(screen.contains("> 1 Changes"));
+
+    key(&mut view, KeyCode::Char('j'));
+    assert!(render(140, 40, &view, false).contains("> 2 Commits"));
+    key(&mut view, KeyCode::Down);
+    assert!(render(140, 40, &view, false).contains("> 3 Branches"));
+    key(&mut view, KeyCode::Down);
+    key(&mut view, KeyCode::Down);
+    key(&mut view, KeyCode::Down);
+    assert!(
+        render(140, 40, &view, false).contains("> 5 Remote"),
+        "stops at the last entry"
+    );
+    key(&mut view, KeyCode::Up);
+    key(&mut view, KeyCode::Enter);
+    assert_eq!(
+        view.open_screen.take(),
+        Some(Screen::PullRequests),
+        "enter on Pull Requests"
+    );
+    key(&mut view, KeyCode::Up);
+    key(&mut view, KeyCode::Enter);
+    assert_eq!(
+        view.open_screen.take(),
+        Some(Screen::Branches),
+        "enter on Branches"
+    );
+    key(&mut view, KeyCode::Up);
+    key(&mut view, KeyCode::Enter);
+    assert_eq!(
+        view.open_screen.take(),
+        Some(Screen::Commits),
+        "enter on Commits"
+    );
+    key(&mut view, KeyCode::Down);
+    key(&mut view, KeyCode::Down);
+    key(&mut view, KeyCode::Down);
+    key(&mut view, KeyCode::Enter);
+    assert!(
+        view.notice
+            .as_ref()
+            .unwrap()
+            .text
+            .contains("Remote is not built yet")
+    );
+    assert_eq!(view.open_screen, None);
+
+    key(&mut view, KeyCode::Esc);
+    assert_eq!(view.focus, Pane::Files);
+    assert!(
+        !view.closed,
+        "esc leaves the sidebar before leaving the screen"
+    );
+}
+
+#[test]
+fn shrinking_the_window_hands_focus_back_from_a_hidden_sidebar() {
+    let mut view = loaded_view();
+    render(140, 40, &view, false);
+    key(&mut view, KeyCode::Char('h'));
+    assert_eq!(view.focus, Pane::Nav);
+    render(80, 24, &view, false);
+    key(&mut view, KeyCode::Char('j'));
+    assert_eq!(view.focus, Pane::Files);
 }

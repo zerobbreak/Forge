@@ -1,10 +1,12 @@
 use super::{BranchesView, DeleteChoice, DirtyChoice, Mode, NameBox, NamePurpose};
 use crate::{
     git::branches::{Branch, BranchKind, BranchList},
+    screens::Screen,
     theme::{Role, Theme},
     ui::{
-        Hint, draw_bar, draw_title_bar, field, fit, format_utc, hint, key_line, pane_block, popup,
-        primary, relative_age, repo_context, ruled_heading, status_line, unix_now, window,
+        Hint, draw_bar, draw_tabs, draw_title_bar, field, fit, format_utc, hint, key_line,
+        pane_block, popup, primary, relative_age, repo_context, ruled_heading, status_line,
+        unix_now, window,
     },
 };
 use ratatui::{
@@ -45,6 +47,7 @@ pub fn draw_branches(
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1),
+            Constraint::Length(1),
             Constraint::Min(3),
             Constraint::Length(u16::from(notice.is_some())),
             Constraint::Length(1),
@@ -52,12 +55,13 @@ pub fn draw_branches(
         .split(inner);
     let context = repo_context(theme, &view.path, view.tracking.as_ref());
     draw_title_bar(frame, theme, rows[0], context, user);
-    draw_body(frame, view, theme, rows[1]);
+    draw_tabs(frame, theme, rows[1], Screen::Branches);
+    draw_body(frame, view, theme, rows[2]);
     if let Some(notice) = notice {
-        frame.render_widget(Paragraph::new(notice), rows[2]);
+        frame.render_widget(Paragraph::new(notice), rows[3]);
     }
-    let width = usize::from(rows[3].width);
-    draw_bar(frame, theme, rows[3], key_line(theme, &hints(view), width));
+    let width = usize::from(rows[4].width);
+    draw_bar(frame, theme, rows[4], key_line(theme, &hints(view), width));
 
     match &view.mode {
         Mode::Browse => {}

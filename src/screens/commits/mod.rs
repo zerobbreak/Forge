@@ -4,11 +4,14 @@ mod view;
 
 pub use view::draw_commits;
 
-use crate::git::{
-    log::{
-        CommitDetail, CommitInfo, LogPage, LogRow, LogScope, PAGE, read_commit_detail, read_log,
+use crate::{
+    git::{
+        log::{
+            CommitDetail, CommitInfo, LogPage, LogRow, LogScope, PAGE, read_commit_detail, read_log,
+        },
+        repository::BranchTracking,
     },
-    repository::BranchTracking,
+    screens::Screen,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::{path::PathBuf, sync::mpsc, thread};
@@ -76,8 +79,10 @@ pub struct CommitsView {
     detail_open: bool,
     /// Background work for the run loop to start.
     pub request: Option<CommitsRequest>,
-    /// Esc was pressed: return to Changes.
+    /// Esc or `1` was pressed: return to Changes.
     pub closed: bool,
+    /// A tab key asked for another screen.
+    pub goto: Option<Screen>,
     pub should_quit: bool,
 }
 
@@ -102,6 +107,7 @@ impl CommitsView {
                 limit: PAGE,
             }),
             closed: false,
+            goto: None,
             should_quit: false,
         }
     }
@@ -256,6 +262,12 @@ impl CommitsView {
         }
         match code {
             KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Char(digit @ '1'..='9') => match Screen::from_digit(digit) {
+                Some(Screen::Changes) => self.closed = true,
+                Some(Screen::Commits) => {}
+                Some(screen) => self.goto = Some(screen),
+                None => {}
+            },
             KeyCode::Esc if self.detail_open => self.detail_open = false,
             KeyCode::Esc => self.closed = true,
             KeyCode::Enter => self.detail_open = !self.detail_open,

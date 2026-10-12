@@ -1,10 +1,11 @@
 use super::{ChangesView, Discard, Pane};
 use crate::{
     git::changes::{FileChange, FileDiff, LineKind, SNAPSHOT_NAMESPACE},
+    screens::Screen,
     theme::{Role, Theme},
     ui::{
-        draw_bar, draw_title_bar, fit, heading, hint, key_line, popup, primary, relative_age,
-        repo_context, ruled_heading, status_line, unix_now, window,
+        draw_bar, draw_tabs, draw_title_bar, fit, heading, hint, key_line, popup, primary,
+        relative_age, repo_context, ruled_heading, status_line, unix_now, window,
     },
 };
 use ratatui::{
@@ -36,6 +37,7 @@ pub fn draw_changes(frame: &mut Frame<'_>, view: &ChangesView, theme: &Theme, us
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1),
+            Constraint::Length(1),
             Constraint::Min(3),
             Constraint::Length(u16::from(notice.is_some())),
             Constraint::Length(1),
@@ -44,12 +46,13 @@ pub fn draw_changes(frame: &mut Frame<'_>, view: &ChangesView, theme: &Theme, us
     let tracking = view.tree.as_ref().map(|tree| &tree.tracking);
     let context = repo_context(theme, &view.path, tracking);
     draw_title_bar(frame, theme, rows[0], context, user);
-    draw_body(frame, view, theme, rows[1]);
+    draw_tabs(frame, theme, rows[1], Screen::Changes);
+    draw_body(frame, view, theme, rows[2]);
     if let Some(notice) = notice {
-        frame.render_widget(Paragraph::new(notice), rows[2]);
+        frame.render_widget(Paragraph::new(notice), rows[3]);
     }
-    let width = usize::from(rows[3].width);
-    draw_bar(frame, theme, rows[3], key_line(theme, &hints(view), width));
+    let width = usize::from(rows[4].width);
+    draw_bar(frame, theme, rows[4], key_line(theme, &hints(view), width));
 
     if let Some(discard) = &view.confirm {
         draw_confirm(frame, theme, discard, inner);
@@ -69,8 +72,6 @@ fn hints(view: &ChangesView) -> Vec<crate::ui::Hint> {
     };
     hints.extend([
         hint("c", "Commit"),
-        hint("l", "Log"),
-        hint("b", "Branches"),
         hint("tab", "Next pane"),
         hint("r", "Refresh"),
         hint("esc", "Projects"),
@@ -80,10 +81,11 @@ fn hints(view: &ChangesView) -> Vec<crate::ui::Hint> {
 }
 
 fn draw_body(frame: &mut Frame<'_>, view: &ChangesView, theme: &Theme, area: Rect) {
+    view.nav_visible.set(area.width >= NAV_MIN_WIDTH);
     if area.width < SPLIT_MIN_WIDTH {
         let pane = pane_block(theme, false).inner(area);
         match view.focus {
-            Pane::Files => draw_files(frame, view, theme, pane),
+            Pane::Files | Pane::Nav => draw_files(frame, view, theme, pane),
             Pane::Diff => draw_diff(frame, view, theme, pane),
         }
         return;
@@ -139,31 +141,39 @@ fn pane_heading(theme: &Theme, text: &str, width: usize, focused: bool) -> Line<
 
 fn draw_nav(frame: &mut Frame<'_>, view: &ChangesView, theme: &Theme, area: Rect) {
     let width = usize::from(area.width);
+    let focused = view.focus == Pane::Nav;
     let changed = view.tree.as_ref().map(|tree| tree.changed_files());
     let branches = view.tree.as_ref().map(|tree| tree.branches);
-    let item = |label: &str, count: Option<usize>, active: bool| {
+    // (number key, label, count); the first entry is the screen being shown.
+    let entries = [
+        ("1", "Changes", changed),
+        ("2", "Commits", None),
+        ("3", "Branches", branches),
+        ("4", "Pull Requests", None),
+        ("5", "Remote", None),
+    ];
+    let mut lines = vec![
+        pane_heading(theme, "Repository", width, focused),
+        Line::raw(""),
+    ];
+    for (index, (key, label, count)) in entries.into_iter().enumerate() {
         let count = count.map(|count| count.to_string()).unwrap_or_default();
-        let label_width = width.saturating_sub(2 + count.chars().count());
-        let text = format!("{}{}", fit(label, label_width), count);
-        if active {
+        let label_width = width.saturating_sub(4 + count.chars().count());
+        let text = format!("{key} {}{count}", fit(label, label_width));
+        let cursor = focused && index == view.nav_cursor;
+        let current = index == 0;
+        lines.push(if cursor || (current && !focused) {
             Line::from(vec![
                 Span::styled("> ", theme.fg(Role::Cursor)),
                 Span::styled(text, theme.bold(Role::Cursor)),
             ])
             .style(theme.bg(Role::Selection))
+        } else if current {
+            Line::styled(format!("• {text}"), theme.bold(Role::Ink))
         } else {
             Line::styled(format!("  {text}"), theme.fg(Role::Muted))
-        }
-    };
-    let lines = vec![
-        heading(theme, "Repository"),
-        Line::raw(""),
-        item("Changes", changed, true),
-        item("Commits", None, false),
-        item("Branches", branches, false),
-        item("Pull Requests", None, false),
-        item("Remote", None, false),
-    ];
+        });
+    }
     frame.render_widget(Paragraph::new(lines), area);
 }
 

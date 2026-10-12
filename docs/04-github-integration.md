@@ -110,3 +110,5 @@ sequenceDiagram
 ## PR workflow (end to end)
 
 `stage → commit → push → CreatePullRequest command → POST PR → PullRequestOpened event → record activity + cache PR`. Pushing to a **protected branch** that is rejected should suggest opening a PR.
+
+> **Implementation note (2026-10-12):** the Pull requests screen reads GitHub through the GitHub CLI rather than native REST calls for now. See `docs/adr/0003-pull-requests-through-github-cli.md`.

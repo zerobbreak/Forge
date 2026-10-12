@@ -13,6 +13,7 @@ use crate::{
         },
         repository::BranchTracking,
     },
+    screens::Screen,
     ui::Notice,
 };
 use crossterm::event::{KeyCode, KeyModifiers};
@@ -150,8 +151,10 @@ pub struct BranchesView {
     detail_open: bool,
     /// Background work for the run loop to start.
     pub request: Option<BranchesRequest>,
-    /// Esc was pressed: return to Changes.
+    /// Esc or `1` was pressed: return to Changes.
     pub closed: bool,
+    /// A tab key asked for another screen.
+    pub goto: Option<Screen>,
     pub should_quit: bool,
 }
 
@@ -172,6 +175,7 @@ impl BranchesView {
             detail_open: false,
             request: Some(BranchesRequest::Load),
             closed: false,
+            goto: None,
             should_quit: false,
         }
     }
@@ -462,6 +466,12 @@ impl BranchesView {
 
         match code {
             KeyCode::Char('q') => self.should_quit = true,
+            KeyCode::Char(digit @ '1'..='9') => match Screen::from_digit(digit) {
+                Some(Screen::Changes) => self.closed = true,
+                Some(Screen::Branches) => {}
+                Some(screen) => self.goto = Some(screen),
+                None => {}
+            },
             KeyCode::Esc if self.detail_open => self.detail_open = false,
             KeyCode::Esc => self.closed = true,
             KeyCode::Tab | KeyCode::BackTab => self.detail_open = !self.detail_open,
