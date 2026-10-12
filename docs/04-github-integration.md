@@ -4,6 +4,20 @@ All GitHub access lives in `forge-github` behind the `ForgeHost` trait (D14). Gi
 
 ## Authentication
 
+### Current scaffold behavior
+
+`forge login` currently delegates the interactive device flow to the GitHub CLI
+by running `gh auth login`; Forge does not read or store the token itself.
+GitHub CLI must be installed and available on `PATH`. Normal Forge startup
+checks `gh auth status` and requires a logged-in account. Native
+`AuthService`/keyring integration and the app-type decision in D3 remain future
+work.
+
+Multiple GitHub.com accounts are managed through `gh`: `forge account list`
+shows saved accounts and the active account, `forge account add` starts another
+GitHub CLI login, and `forge account use USERNAME` selects a saved account.
+Forge does not copy or store account tokens.
+
 - **Flow:** OAuth **device flow**. Request device code → show verification URL + one-time code → poll until authorised/denied/expired → store token in OS keyring → fetch profile → "Logged in as NAME".
 - **Scopes:** minimum for MVP (repo access for PRs and checks). Document each scope and why.
 - **App type (D3, Open):** evaluate a *GitHub App with expiring user tokens* vs an *OAuth App*. Keep PAT and `gh` token as fallbacks. Implement behind `AuthService` so the choice is swappable.
