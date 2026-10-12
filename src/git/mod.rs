@@ -5,3 +5,4 @@ pub mod changes;
 pub mod commit;
 pub mod log;
 pub mod repository;
+pub mod search;

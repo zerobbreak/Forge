@@ -393,6 +393,10 @@ fn number_keys_open_the_other_screens_from_any_pane() {
     key(&mut view, KeyCode::Char('p'));
     assert_eq!(view.open_screen.take(), Some(Screen::PullRequests));
     key(&mut view, KeyCode::Char('5'));
+    assert_eq!(view.open_screen.take(), Some(Screen::Search));
+    key(&mut view, KeyCode::Char('f'));
+    assert_eq!(view.open_screen.take(), Some(Screen::Search));
+    key(&mut view, KeyCode::Char('6'));
     assert!(
         view.notice
             .as_ref()
@@ -437,34 +441,24 @@ fn the_sidebar_can_be_focused_and_its_labels_open_screens() {
     key(&mut view, KeyCode::Down);
     key(&mut view, KeyCode::Down);
     key(&mut view, KeyCode::Down);
+    key(&mut view, KeyCode::Down);
     assert!(
-        render(140, 40, &view, false).contains("> 5 Remote"),
+        render(140, 40, &view, false).contains("> 6 Remote"),
         "stops at the last entry"
     );
-    key(&mut view, KeyCode::Up);
-    key(&mut view, KeyCode::Enter);
-    assert_eq!(
-        view.open_screen.take(),
-        Some(Screen::PullRequests),
-        "enter on Pull Requests"
-    );
-    key(&mut view, KeyCode::Up);
-    key(&mut view, KeyCode::Enter);
-    assert_eq!(
-        view.open_screen.take(),
-        Some(Screen::Branches),
-        "enter on Branches"
-    );
-    key(&mut view, KeyCode::Up);
-    key(&mut view, KeyCode::Enter);
-    assert_eq!(
-        view.open_screen.take(),
-        Some(Screen::Commits),
-        "enter on Commits"
-    );
-    key(&mut view, KeyCode::Down);
-    key(&mut view, KeyCode::Down);
-    key(&mut view, KeyCode::Down);
+    for (expected, label) in [
+        (Screen::Search, "Search"),
+        (Screen::PullRequests, "Pull Requests"),
+        (Screen::Branches, "Branches"),
+        (Screen::Commits, "Commits"),
+    ] {
+        key(&mut view, KeyCode::Up);
+        key(&mut view, KeyCode::Enter);
+        assert_eq!(view.open_screen.take(), Some(expected), "enter on {label}");
+    }
+    for _ in 0..4 {
+        key(&mut view, KeyCode::Down);
+    }
     key(&mut view, KeyCode::Enter);
     assert!(
         view.notice

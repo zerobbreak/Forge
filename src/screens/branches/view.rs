@@ -4,8 +4,8 @@ use crate::{
     screens::Screen,
     theme::{Role, Theme},
     ui::{
-        Hint, draw_bar, draw_tabs, draw_title_bar, field, fit, format_utc, hint, key_line,
-        pane_block, popup, primary, relative_age, repo_context, ruled_heading, status_line,
+        Hint, draw_bar, draw_dialog, draw_tabs, draw_title_bar, field, fit, format_utc, hint,
+        key_line, pane_block, primary, relative_age, repo_context, ruled_heading, status_line,
         unix_now, window,
     },
 };
@@ -13,9 +13,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Position, Rect},
     text::{Line, Span},
-    widgets::{
-        Block, BorderType, Borders, Clear, List, ListItem, ListState, Padding, Paragraph, Wrap,
-    },
+    widgets::{List, ListItem, ListState, Paragraph, Wrap},
 };
 
 /// At this width the list and the detail sit side by side; below it one replaces the other.
@@ -370,46 +368,6 @@ fn worktree_lines(theme: &Theme, list: &BranchList, width: usize) -> Vec<Line<'s
         ));
     }
     lines
-}
-
-/// A bordered dialog with `lines` and a hint row, centred near the top of `area`.
-fn draw_dialog(
-    frame: &mut Frame<'_>,
-    theme: &Theme,
-    area: Rect,
-    title: &str,
-    border: Role,
-    lines: Vec<Line<'static>>,
-    hints: &[Hint],
-) -> Rect {
-    let height = u16::try_from(lines.len())
-        .unwrap_or(u16::MAX)
-        .saturating_add(3);
-    let popup = popup(area, 68, height);
-    frame.render_widget(Clear, popup);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(theme.fg(border))
-        .title(Span::styled(
-            format!(" {} ", title.to_uppercase()),
-            theme.bold(border),
-        ))
-        .padding(Padding::horizontal(1))
-        .style(theme.bg(Role::Panel).patch(theme.fg(Role::Ink)));
-    let inner = block.inner(popup);
-    frame.render_widget(block, popup);
-    let sections = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(1)])
-        .split(inner);
-    frame.render_widget(
-        Paragraph::new(lines).wrap(Wrap { trim: false }),
-        sections[0],
-    );
-    let width = usize::from(sections[1].width);
-    draw_bar(frame, theme, sections[1], key_line(theme, hints, width));
-    sections[0]
 }
 
 fn draw_name(frame: &mut Frame<'_>, theme: &Theme, input: &NameBox, area: Rect) {

@@ -151,7 +151,8 @@ fn draw_nav(frame: &mut Frame<'_>, view: &ChangesView, theme: &Theme, area: Rect
         ("2", "Commits", None),
         ("3", "Branches", branches),
         ("4", "Pull Requests", None),
-        ("5", "Remote", None),
+        ("5", "Search", None),
+        ("6", "Remote", None),
     ];
     let mut lines = vec![
         pane_heading(theme, "Repository", width, focused),

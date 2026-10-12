@@ -23,8 +23,8 @@ pub enum Pane {
     Diff,
 }
 
-/// Sidebar entries in order; the first three are screens, the rest are planned.
-const NAV_ITEMS: usize = 5;
+/// Sidebar entries in order; the first five are screens, the last is planned.
+const NAV_ITEMS: usize = 6;
 
 /// Identifies a row: the same path can be listed once staged and once unstaged.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -505,7 +505,7 @@ impl ChangesView {
             self.nav_cursor = 0;
         } else {
             self.say(
-                "The sidebar needs a wider window. Use the tabs on top: 2 Commits, 3 Branches, 4 Pull Requests.",
+                "The sidebar needs a wider window. Use the tabs on top: 2 Commits, 3 Branches, 4 Pull Requests, 5 Search.",
             );
         }
     }
@@ -517,6 +517,7 @@ impl ChangesView {
             1 => self.open_screen = Some(Screen::Commits),
             2 => self.open_screen = Some(Screen::Branches),
             3 => self.open_screen = Some(Screen::PullRequests),
+            4 => self.open_screen = Some(Screen::Search),
             _ => self.say("Remote is not built yet."),
         }
     }
@@ -534,6 +535,7 @@ impl ChangesView {
             KeyCode::Char('l') => self.open_screen = Some(Screen::Commits),
             KeyCode::Char('b') => self.open_screen = Some(Screen::Branches),
             KeyCode::Char('p') => self.open_screen = Some(Screen::PullRequests),
+            KeyCode::Char('f') => self.open_screen = Some(Screen::Search),
             _ => {}
         }
     }
@@ -565,7 +567,7 @@ impl ChangesView {
         if self.focus == Pane::Nav && !self.nav_visible.get() {
             self.focus = Pane::Files;
         }
-        if let KeyCode::Char(digit @ '1'..='5') = code
+        if let KeyCode::Char(digit @ '1'..='6') = code
             && !control
         {
             return self.open_entry(digit as usize - '1' as usize);
@@ -610,6 +612,7 @@ impl ChangesView {
             KeyCode::Char('l') => self.open_screen = Some(Screen::Commits),
             KeyCode::Char('b') => self.open_screen = Some(Screen::Branches),
             KeyCode::Char('p') => self.open_screen = Some(Screen::PullRequests),
+            KeyCode::Char('f') => self.open_screen = Some(Screen::Search),
             KeyCode::Left | KeyCode::Char('h') if self.focus == Pane::Files => self.focus_nav(),
             KeyCode::Char('c') if self.tree.is_some() => {
                 self.notice = None;

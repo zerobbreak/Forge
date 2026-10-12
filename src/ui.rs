@@ -9,7 +9,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Padding, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, Wrap},
 };
 use std::{
     env,
@@ -225,6 +225,46 @@ pub fn draw_tabs(frame: &mut Frame<'_>, theme: &Theme, area: Rect, active: Scree
         spans.push(Span::raw(" "));
     }
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
+}
+
+/// A bordered dialog with `lines` and a hint row, centred near the top of `area`.
+pub fn draw_dialog(
+    frame: &mut Frame<'_>,
+    theme: &Theme,
+    area: Rect,
+    title: &str,
+    border: Role,
+    lines: Vec<Line<'static>>,
+    hints: &[Hint],
+) -> Rect {
+    let height = u16::try_from(lines.len())
+        .unwrap_or(u16::MAX)
+        .saturating_add(3);
+    let popup = popup(area, 68, height);
+    frame.render_widget(Clear, popup);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(theme.fg(border))
+        .title(Span::styled(
+            format!(" {} ", title.to_uppercase()),
+            theme.bold(border),
+        ))
+        .padding(Padding::horizontal(1))
+        .style(theme.bg(Role::Panel).patch(theme.fg(Role::Ink)));
+    let inner = block.inner(popup);
+    frame.render_widget(block, popup);
+    let sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1), Constraint::Length(1)])
+        .split(inner);
+    frame.render_widget(
+        Paragraph::new(lines).wrap(Wrap { trim: false }),
+        sections[0],
+    );
+    let width = usize::from(sections[1].width);
+    draw_bar(frame, theme, sections[1], key_line(theme, hints, width));
+    sections[0]
 }
 
 /// An uppercase section label, e.g. `RECENT COMMITS`.

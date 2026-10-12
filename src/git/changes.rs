@@ -10,6 +10,7 @@ use std::{
     collections::HashMap,
     fs,
     path::{Component, Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -567,16 +568,54 @@ fn checked_path(path: &str) -> Result<&str, String> {
     }
 }
 
+/// A snapshot name stamp: the current time in milliseconds, nudged forward when needed so
+/// two snapshots taken in the same millisecond (a multi-file replace) never share a ref.
 fn unix_millis() -> u128 {
-    SystemTime::now()
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_millis())
+        .map_or(0, |elapsed| elapsed.as_millis() as u64);
+    let mut last = LAST.load(Ordering::Relaxed);
+    loop {
+        let next = now.max(last + 1);
+        match LAST.compare_exchange(last, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return u128::from(next),
+            Err(actual) => last = actual,
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::{TestDirectory, git_text, run_git as git};
+
+    #[test]
+    fn snapshots_taken_back_to_back_never_share_a_ref() {
+        let (_directory, repo) = repository();
+        fs::write(
+            repo.join("a.txt"),
+            "one
+",
+        )
+        .unwrap();
+        fs::write(
+            repo.join("b.txt"),
+            "two
+",
+        )
+        .unwrap();
+        let mut refs = Vec::new();
+        for path in ["a.txt", "b.txt", "a.txt", "b.txt", "a.txt"] {
+            refs.push(snapshot(&repo, path, "test").expect("snapshot saved"));
+        }
+        let mut unique = refs.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), refs.len(), "{refs:?}");
+        let listed = git_text(&repo, &["for-each-ref", "refs/forge/snapshots"]);
+        assert_eq!(listed.lines().count(), refs.len());
+    }
 
     #[test]
     fn parses_porcelain_status_into_staged_and_unstaged() {

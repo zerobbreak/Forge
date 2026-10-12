@@ -156,6 +156,52 @@ pub fn commands(screen: Screen) -> Vec<Command> {
                 "reload fetch",
             ),
         ],
+        Screen::Search => &[
+            key(
+                "Edit the search",
+                "tab",
+                KeyCode::Tab,
+                "find query type text",
+            ),
+            key(
+                "Leave this match out / put it back",
+                "space",
+                KeyCode::Char(' '),
+                "skip exclude include select",
+            ),
+            key(
+                "Leave this whole file out",
+                "x",
+                KeyCode::Char('x'),
+                "skip exclude include",
+            ),
+            key(
+                "Replace this match…",
+                "enter",
+                KeyCode::Enter,
+                "substitute change",
+            ),
+            key(
+                "Replace all included matches…",
+                "R",
+                KeyCode::Char('R'),
+                "substitute change everything",
+            ),
+            key(
+                "Match case",
+                "c",
+                KeyCode::Char('c'),
+                "uppercase lowercase sensitive",
+            ),
+            key(
+                "Regular expression",
+                "e",
+                KeyCode::Char('e'),
+                "regex pattern",
+            ),
+            key("Whole word", "w", KeyCode::Char('w'), "exact"),
+            key("Search again", "r", KeyCode::Char('r'), "refresh reload"),
+        ],
     };
     let mut commands = own.to_vec();
     commands.extend([
@@ -172,6 +218,12 @@ pub fn commands(screen: Screen) -> Vec<Command> {
             "4",
             Screen::PullRequests,
             "pr github review",
+        ),
+        go(
+            "Go to Search",
+            "5",
+            Screen::Search,
+            "find grep replace text files",
         ),
         Command {
             title: "Back to the project list",
